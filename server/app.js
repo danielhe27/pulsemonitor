@@ -92,6 +92,41 @@ app.get("/api/checks/:id", (req, res) => {
 
 const PORT = process.env.PORT || 5050;
 
+const AUTO_CHECK_MS = Number(process.env.AUTO_CHECK_MS || 2_000);
+
+async function runAutoChecks() {
+  try {
+    // Read all endpoints from DB
+    const endpoints = db
+      .prepare("SELECT id, url FROM endpoints ORDER BY created_at DESC")
+      .all();
+
+    if (!endpoints || endpoints.length === 0) return;
+
+    for (const e of endpoints) {
+      const result = await checkUrl(e.url);
+
+      // Save into checks table
+      db.prepare(
+        `INSERT INTO checks (endpoint_id, ok, status, ms)
+         VALUES (?, ?, ?, ?)`
+      ).run(
+        e.id,
+        result.ok ? 1 : 0,
+        result.status,
+        result.ms
+      );
+    }
+
+    console.log(`[auto-check] ran ${endpoints.length} checks`);
+  } catch (err) {
+    console.error("[auto-check] error:", err);
+  }
+}
+
+setInterval(runAutoChecks, AUTO_CHECK_MS);
+runAutoChecks(); // run once on startup
+
 app.listen(PORT, () => {
   console.log(`API running at http://localhost:${PORT}`);
 });
