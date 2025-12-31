@@ -1,35 +1,37 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { useEffect, useState } from "react";
+import EndpointForm from "./components/EndpointForm.jsx";
+import EndpointList from "./components/EndpointList.jsx";
 
-function App() {
-  const [count, setCount] = useState(0)
+export default function App() {
+  const [form, setForm] = useState({ name: "", method: "GET", url: "" });
+  const [endpoints, setEndpoints] = useState([]);
 
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
-}
+    <div style={{ maxWidth: 800, margin: "40px auto", fontFamily: "system-ui" }}>
+      <h1>PulseCheck</h1>
+      <p>Website and API monitoring dashboard</p>
 
-export default App
+      <EndpointForm
+        form={form}
+        setForm={setForm}
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!form.name || !form.url) return;
+
+          setEndpoints((prev) => [
+            ...prev,
+            { id: Date.now(), name: form.name, method: form.method, url: form.url },
+          ]);
+
+          setForm({ name: "", method: "GET", url: "" });
+        }}
+      />
+
+      <h2>Endpoints</h2>
+      <EndpointList
+        endpoints={endpoints}
+        onRemove={(id) => setEndpoints((prev) => prev.filter((x) => x.id !== id))}
+      />
+    </div>
+  );
+}
