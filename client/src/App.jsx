@@ -1,6 +1,7 @@
 // src/App.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import styles from "./App.module.css";
+import PiDashboard from "./pi/PiDashboard.jsx";
 
 const API = ""; // Vite proxy -> /api => http://127.0.0.1:5050
 
@@ -9,7 +10,6 @@ const API = ""; // Vite proxy -> /api => http://127.0.0.1:5050
 const AUTO_GENERATE = true;
 
 async function fetchJSON(url, opts = {}) {
-  // Prevent browser caches (important for repeated polling)
   const sep = url.includes("?") ? "&" : "?";
   const bust = `${sep}t=${Date.now()}`;
 
@@ -94,6 +94,9 @@ function clamp(n, a, b) {
 }
 
 export default function App() {
+  // ✅ HERE is where it goes (inside the component)
+  const [view, setView] = useState("services"); // services | pi
+
   const [endpoints, setEndpoints] = useState([]);
   const [name, setName] = useState("");
   const [method, setMethod] = useState("GET");
@@ -110,8 +113,8 @@ export default function App() {
   // Telemetry drawer
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerEndpointId, setDrawerEndpointId] = useState(null);
-  const [drawerWindow, setDrawerWindow] = useState("2m"); // 2m | 10m | 1h
-  const [drawerSpeed, setDrawerSpeed] = useState("1s"); // 0.5s | 1s | 2s
+  const [drawerWindow, setDrawerWindow] = useState("2m");
+  const [drawerSpeed, setDrawerSpeed] = useState("1s");
   const [drawerPinned, setDrawerPinned] = useState(false);
 
   const endpointsById = useMemo(() => {
@@ -132,7 +135,7 @@ export default function App() {
       const data = await fetchJSON(`${API}/api/endpoints`);
       setEndpoints(Array.isArray(data) ? data : []);
     } catch {
-      // keep quiet during polling
+      // quiet
     }
   }
 
@@ -147,36 +150,29 @@ export default function App() {
   }
 
   async function generateCheck(id) {
-    // This is what clicking Check does, we just automate it when AUTO_GENERATE = true.
     try {
       await fetchJSON(`${API}/api/check/${id}`, { method: "POST" });
     } catch {
-      // ignore generate failures
+      // ignore
     }
   }
 
   async function refreshEndpointTelemetry(id) {
-    // 1) Optionally create a new check row
     if (AUTO_GENERATE) await generateCheck(id);
-
-    // 2) Pull fresh rows
     const rows = await loadChecksFor(id, 60);
     setLatest((p) => ({ ...p, [id]: rows[0] ?? null }));
     setHistory((p) => ({ ...p, [id]: rows.slice(0, 50) }));
   }
 
-  // Initial load
   useEffect(() => {
     loadEndpoints();
   }, []);
 
-  // Poll endpoints list
   useEffect(() => {
     const t = setInterval(loadEndpoints, 3000);
     return () => clearInterval(t);
   }, []);
 
-  // Poll telemetry for all endpoints
   useEffect(() => {
     if (endpoints.length === 0) return;
 
@@ -185,7 +181,6 @@ export default function App() {
     async function tick() {
       if (cancelled) return;
 
-      // Run all endpoint refresh in parallel
       await Promise.all(
         endpoints.map(async (e) => {
           if (cancelled) return;
@@ -219,9 +214,7 @@ export default function App() {
 
     const avgMs =
       latestRows.length > 0
-        ? Math.round(
-            latestRows.reduce((sum, r) => sum + (Number(r.ms) || 0), 0) / latestRows.length
-          )
+        ? Math.round(latestRows.reduce((sum, r) => sum + (Number(r.ms) || 0), 0) / latestRows.length)
         : null;
 
     let statusLabel = "No checks yet";
@@ -255,7 +248,6 @@ export default function App() {
       setMsg("Endpoint added.");
       await loadEndpoints();
 
-      // immediately create a first datapoint
       if (data?.id) await refreshEndpointTelemetry(data.id);
     } catch (err) {
       setMsg(err?.message || "Backend not reachable.");
@@ -268,9 +260,7 @@ export default function App() {
     setMsg("");
     try {
       await fetchJSON(`${API}/api/endpoints/${id}`, { method: "DELETE" });
-    } catch {
-      // ignore
-    }
+    } catch {}
 
     setLatest((p) => {
       const c = { ...p };
@@ -333,11 +323,7 @@ export default function App() {
     setDrawerOpen(true);
   }
 
-  function windowToCount(win) {
-    // backend returns up to 50 rows anyway, keep it simple
-    if (win === "2m") return 50;
-    if (win === "10m") return 50;
-    if (win === "1h") return 50;
+  function windowToCount() {
     return 50;
   }
 
@@ -368,16 +354,12 @@ export default function App() {
     const max = msVals.length ? msVals[msVals.length - 1] : null;
     const p95 = msVals.length ? msVals[Math.floor(0.95 * (msVals.length - 1))] : null;
 
-    const downCount = rows.reduce(
-      (acc, r) => acc + ((r.ok === 1 || r.ok === true) ? 0 : 1),
-      0
-    );
+    const downCount = rows.reduce((acc, r) => acc + ((r.ok === 1 || r.ok === true) ? 0 : 1), 0);
     const downPct = rows.length ? Math.round((downCount / rows.length) * 100) : null;
 
     return { p95, min, max, downPct };
   }, [drawerRows]);
 
-  // Drawer polling (faster)
   const drawerTimerRef = useRef(null);
 
   useEffect(() => {
@@ -389,7 +371,6 @@ export default function App() {
     async function tick() {
       if (cancelled) return;
 
-      // Important: generate a new check to make it move
       if (AUTO_GENERATE) await generateCheck(drawerEndpointId);
 
       const rows = await loadChecksFor(drawerEndpointId, windowToCount(drawerWindow));
@@ -398,7 +379,6 @@ export default function App() {
     }
 
     tick();
-
     drawerTimerRef.current = setInterval(tick, intervalMs);
 
     return () => {
@@ -461,6 +441,7 @@ export default function App() {
     return { volatility, anomaly, recommendation };
   }, [drawerRows]);
 
+  // ✅ Tabs go in the top bar, and ✅ rendering is conditional
   return (
     <div className={styles.page}>
       <div className={styles.bgGlow} />
@@ -474,6 +455,23 @@ export default function App() {
             </div>
           </div>
 
+          <div className={styles.viewTabs}>
+            <button
+              className={`${styles.tabBtn} ${view === "services" ? styles.tabBtnActive : ""}`}
+              onClick={() => setView("services")}
+              type="button"
+            >
+              Services
+            </button>
+            <button
+              className={`${styles.tabBtn} ${view === "pi" ? styles.tabBtnActive : ""}`}
+              onClick={() => setView("pi")}
+              type="button"
+            >
+              Raspberry Pi
+            </button>
+          </div>
+
           <div className={styles.systemChip}>
             <span className={`${styles.chipDot} ${styles[systemSummary.statusTone]}`} />
             <span className={styles.chipText}>{systemSummary.statusLabel}</span>
@@ -483,192 +481,217 @@ export default function App() {
           </div>
         </div>
 
-        <div className={styles.grid}>
-          <div className={styles.panel}>
-            <div className={styles.panelHeader}>
-              <div>
-                <div className={styles.panelTitle}>New endpoint</div>
-                <div className={styles.panelSub}>Add a service to monitor</div>
-              </div>
-
-              <div className={styles.kpiRow}>
-                <div className={styles.kpi}>
-                  <div className={styles.kpiLabel}>Tracked</div>
-                  <div className={styles.kpiValue}>{endpoints.length}</div>
+        {/* ✅ Only show services UI when view = services */}
+        {view === "services" ? (
+          <div className={styles.grid}>
+            {/* LEFT */}
+            <div className={styles.panel}>
+              <div className={styles.panelHeader}>
+                <div>
+                  <div className={styles.panelTitle}>New endpoint</div>
+                  <div className={styles.panelSub}>Add a service to monitor</div>
                 </div>
-                <div className={styles.kpi}>
-                  <div className={styles.kpiLabel}>Down</div>
-                  <div className={styles.kpiValue}>{systemSummary.downCount}</div>
+
+                <div className={styles.kpiRow}>
+                  <div className={styles.kpi}>
+                    <div className={styles.kpiLabel}>Tracked</div>
+                    <div className={styles.kpiValue}>{endpoints.length}</div>
+                  </div>
+                  <div className={styles.kpi}>
+                    <div className={styles.kpiLabel}>Down</div>
+                    <div className={styles.kpiValue}>{systemSummary.downCount}</div>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <form onSubmit={addEndpoint} className={styles.form}>
-              <div className={styles.field}>
-                <label className={styles.label}>Name</label>
-                <input
-                  className={styles.input}
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Auth API"
-                />
-              </div>
-
-              <div className={styles.field}>
-                <label className={styles.label}>Method</label>
-                <select className={styles.select} value={method} onChange={(e) => setMethod(e.target.value)}>
-                  <option>GET</option>
-                  <option>POST</option>
-                  <option>PUT</option>
-                  <option>DELETE</option>
-                </select>
-                <div className={styles.hint}>Checker uses GET for request. Method is stored for display.</div>
-              </div>
-
-              <div className={styles.field}>
-                <label className={styles.label}>URL</label>
-                <div className={styles.protocolRow}>
-                  <select
-                    className={styles.select}
-                    value={defaultProtocol}
-                    onChange={(e) => setDefaultProtocol(e.target.value)}
-                  >
-                    <option value="https://">https://</option>
-                    <option value="http://">http://</option>
-                  </select>
+              <form onSubmit={addEndpoint} className={styles.form}>
+                <div className={styles.field}>
+                  <label className={styles.label}>Name</label>
                   <input
                     className={styles.input}
-                    value={url}
-                    onChange={(e) => setUrl(e.target.value)}
-                    placeholder="example.com/health"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Auth API"
                   />
                 </div>
-                <div className={styles.hint}>If you omit http/https, we prepend the selected protocol.</div>
-              </div>
 
-              <div className={styles.actions}>
-                <button className={styles.primaryBtn} disabled={loading}>
-                  {loading ? "Adding..." : "Add endpoint"}
-                </button>
-                <button type="button" className={styles.ghostBtn} onClick={loadEndpoints}>
-                  Refresh
-                </button>
-              </div>
+                <div className={styles.field}>
+                  <label className={styles.label}>Method</label>
+                  <select className={styles.select} value={method} onChange={(e) => setMethod(e.target.value)}>
+                    <option>GET</option>
+                    <option>POST</option>
+                    <option>PUT</option>
+                    <option>DELETE</option>
+                  </select>
+                  <div className={styles.hint}>Checker uses GET for request. Method is stored for display.</div>
+                </div>
 
-              {msg && <div className={styles.toast}>{msg}</div>}
-            </form>
+                <div className={styles.field}>
+                  <label className={styles.label}>URL</label>
+                  <div className={styles.protocolRow}>
+                    <select
+                      className={styles.select}
+                      value={defaultProtocol}
+                      onChange={(e) => setDefaultProtocol(e.target.value)}
+                    >
+                      <option value="https://">https://</option>
+                      <option value="http://">http://</option>
+                    </select>
+                    <input
+                      className={styles.input}
+                      value={url}
+                      onChange={(e) => setUrl(e.target.value)}
+                      placeholder="example.com/health"
+                    />
+                  </div>
+                  <div className={styles.hint}>If you omit http/https, we prepend the selected protocol.</div>
+                </div>
 
-            <div className={styles.aiBox}>
-              <div className={styles.aiTitle}>AI Insight (heuristic)</div>
-              <div className={styles.aiText}>
-                Calm monitoring. Status first, details on demand. Interface stays quiet until something changes.
-              </div>
-            </div>
-          </div>
+                <div className={styles.actions}>
+                  <button className={styles.primaryBtn} disabled={loading} type="submit">
+                    {loading ? "Adding..." : "Add endpoint"}
+                  </button>
+                  <button type="button" className={styles.ghostBtn} onClick={loadEndpoints}>
+                    Refresh
+                  </button>
+                </div>
 
-          <div className={styles.panel}>
-            <div className={styles.panelHeader}>
-              <div>
-                <div className={styles.panelTitle}>Endpoints</div>
-                <div className={styles.panelSub}>
-                  Live cards. Trend opens deep telemetry. Auto-generate: {AUTO_GENERATE ? "ON" : "OFF"}
+                {msg && <div className={styles.toast}>{msg}</div>}
+              </form>
+
+              <div className={styles.aiBox}>
+                <div className={styles.aiTitle}>AI Insight (heuristic)</div>
+                <div className={styles.aiText}>
+                  Calm monitoring. Status first, details on demand. Interface stays quiet until something changes.
                 </div>
               </div>
             </div>
 
-            {endpoints.length === 0 ? (
-              <div className={styles.empty}>
-                <div className={styles.emptyTitle}>No endpoints yet</div>
-                <div className={styles.emptySub}>Add one, then it will start moving.</div>
+            {/* RIGHT */}
+            <div className={styles.panel}>
+              <div className={styles.panelHeader}>
+                <div>
+                  <div className={styles.panelTitle}>Endpoints</div>
+                  <div className={styles.panelSub}>
+                    Live cards. Trend opens deep telemetry. Auto-generate: {AUTO_GENERATE ? "ON" : "OFF"}
+                  </div>
+                </div>
               </div>
-            ) : (
-              <div className={styles.cardList}>
-                {endpoints.map((e) => {
-                  const last = latest[e.id];
-                  const up = isUp(last);
-                  const rows = history[e.id] || [];
 
-                  return (
-                    <div key={e.id} className={`${styles.card} ${up === null ? "" : up ? styles.cardUp : styles.cardDown}`}>
-                      <div className={styles.cardTop}>
-                        <div className={styles.cardLeft}>
-                          <div className={styles.cardTitleRow}>
-                            <span className={`${styles.statusDot} ${toneClass(up)}`} />
-                            <div className={styles.cardTitle}>{e.name}</div>
-                            <div
-                              className={`${styles.badge} ${
-                                up === null ? styles.badgeNeutral : up ? styles.badgeUp : styles.badgeDown
-                              }`}
-                            >
-                              {up === null ? "No data" : up ? "UP" : "DOWN"}
-                            </div>
-                          </div>
-                          <div className={styles.cardUrl}>{e.url}</div>
-                        </div>
+              {endpoints.length === 0 ? (
+                <div className={styles.empty}>
+                  <div className={styles.emptyTitle}>No endpoints yet</div>
+                  <div className={styles.emptySub}>Add one, then it will start moving.</div>
+                </div>
+              ) : (
+                <div className={styles.cardList}>
+                  {endpoints.map((e) => {
+                    const last = latest[e.id];
+                    const up = isUp(last);
+                    const rows = history[e.id] || [];
 
-                        <div className={styles.cardRight}>
-                          <button className={styles.smallBtn} onClick={() => runCheck(e.id)} disabled={!!checking[e.id]}>
-                            {checking[e.id] ? "Checking..." : "Check"}
-                          </button>
-
-                          <button className={styles.smallGhostBtn} onClick={() => openTelemetry(e.id)}>
-                            Trend
-                          </button>
-
-                          <button className={styles.smallDangerBtn} onClick={() => removeEndpoint(e.id)}>
-                            Delete
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className={styles.cardMetaRow}>
-                        <div className={styles.metric}>
-                          <div className={styles.metricLabel}>Latency</div>
-                          <div className={styles.metricValue}>{last ? `${last.ms} ms` : "—"}</div>
-                        </div>
-                        <div className={styles.metric}>
-                          <div className={styles.metricLabel}>Status</div>
-                          <div className={styles.metricValue}>{last ? last.status ?? "N/A" : "—"}</div>
-                        </div>
-                        <div className={styles.metric}>
-                          <div className={styles.metricLabel}>Last check</div>
-                          <div className={styles.metricValue}>{last ? timeAgo(last.created_at) : "—"}</div>
-                        </div>
-                        <div className={styles.metric}>
-                          <div className={styles.metricLabel}>Trend</div>
-                          <div className={styles.metricValue}>
-                            <Sparkline points={rows.slice(0, 18).reverse()} />
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className={styles.miniLog}>
-                        {rows.slice(0, 3).map((r, idx) => {
-                          const ok = r.ok === 1 || r.ok === true;
-                          return (
-                            <div key={idx} className={styles.miniLogRow}>
-                              <span className={`${styles.historyDot} ${ok ? styles.good : styles.bad}`} />
-                              <div className={styles.miniLogText}>
-                                {ok ? "UP" : "DOWN"} , status {r.status ?? "N/A"} , {r.ms} ms , {timeAgo(r.created_at)}
+                    return (
+                      <div
+                        key={e.id}
+                        className={`${styles.card} ${up === null ? "" : up ? styles.cardUp : styles.cardDown}`}
+                      >
+                        <div className={styles.cardTop}>
+                          <div className={styles.cardLeft}>
+                            <div className={styles.cardTitleRow}>
+                              <span className={`${styles.statusDot} ${toneClass(up)}`} />
+                              <div className={styles.cardTitle}>{e.name}</div>
+                              <div
+                                className={`${styles.badge} ${
+                                  up === null ? styles.badgeNeutral : up ? styles.badgeUp : styles.badgeDown
+                                }`}
+                              >
+                                {up === null ? "No data" : up ? "UP" : "DOWN"}
                               </div>
                             </div>
-                          );
-                        })}
+                            <div className={styles.cardUrl}>{e.url}</div>
+                          </div>
+
+                          <div className={styles.cardRight}>
+                            <button
+                              className={styles.smallBtn}
+                              onClick={() => runCheck(e.id)}
+                              disabled={!!checking[e.id]}
+                              type="button"
+                            >
+                              {checking[e.id] ? "Checking..." : "Check"}
+                            </button>
+
+                            <button
+                              className={styles.smallGhostBtn}
+                              onClick={() => openTelemetry(e.id)}
+                              type="button"
+                            >
+                              Trend
+                            </button>
+
+                            <button
+                              className={styles.smallDangerBtn}
+                              onClick={() => removeEndpoint(e.id)}
+                              type="button"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className={styles.cardMetaRow}>
+                          <div className={styles.metric}>
+                            <div className={styles.metricLabel}>Latency</div>
+                            <div className={styles.metricValue}>{last ? `${last.ms} ms` : "—"}</div>
+                          </div>
+                          <div className={styles.metric}>
+                            <div className={styles.metricLabel}>Status</div>
+                            <div className={styles.metricValue}>{last ? last.status ?? "N/A" : "—"}</div>
+                          </div>
+                          <div className={styles.metric}>
+                            <div className={styles.metricLabel}>Last check</div>
+                            <div className={styles.metricValue}>{last ? timeAgo(last.created_at) : "—"}</div>
+                          </div>
+                          <div className={styles.metric}>
+                            <div className={styles.metricLabel}>Trend</div>
+                            <div className={styles.metricValue}>
+                              <Sparkline points={rows.slice(0, 18).reverse()} />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className={styles.miniLog}>
+                          {rows.slice(0, 3).map((r, idx) => {
+                            const ok = r.ok === 1 || r.ok === true;
+                            return (
+                              <div key={idx} className={styles.miniLogRow}>
+                                <span className={`${styles.historyDot} ${ok ? styles.good : styles.bad}`} />
+                                <div className={styles.miniLogText}>
+                                  {ok ? "UP" : "DOWN"} , status {r.status ?? "N/A"} , {r.ms} ms ,{" "}
+                                  {timeAgo(r.created_at)}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        ) : (
+          // ✅ When view = pi, show the Pi dashboard only
+          <PiDashboard />
+        )}
 
         <div className={styles.footer}>
           <div className={styles.footerText}>2030 UX mode: progressive disclosure, calm signals, minimal noise.</div>
         </div>
       </div>
 
-      {/* Drawer */}
+      {/* Drawer stays here, but only opens from services */}
       <div
         className={`${styles.drawerOverlay} ${drawerOpen ? styles.drawerOverlayOpen : ""}`}
         onClick={() => {
@@ -686,7 +709,13 @@ export default function App() {
                 </span>
               </div>
 
-              <button className={styles.drawerClose} onClick={() => { if (!drawerPinned) setDrawerOpen(false); }}>
+              <button
+                className={styles.drawerClose}
+                onClick={() => {
+                  if (!drawerPinned) setDrawerOpen(false);
+                }}
+                type="button"
+              >
                 Close
               </button>
             </div>
@@ -699,7 +728,11 @@ export default function App() {
             <div className={styles.drawerControls}>
               <div className={styles.drawerControl}>
                 <div className={styles.drawerControlLabel}>Window</div>
-                <select className={styles.drawerSelect} value={drawerWindow} onChange={(e) => setDrawerWindow(e.target.value)}>
+                <select
+                  className={styles.drawerSelect}
+                  value={drawerWindow}
+                  onChange={(e) => setDrawerWindow(e.target.value)}
+                >
                   <option value="2m">Last 2m</option>
                   <option value="10m">Last 10m</option>
                   <option value="1h">Last 1h</option>
@@ -708,7 +741,11 @@ export default function App() {
 
               <div className={styles.drawerControl}>
                 <div className={styles.drawerControlLabel}>Speed</div>
-                <select className={styles.drawerSelect} value={drawerSpeed} onChange={(e) => setDrawerSpeed(e.target.value)}>
+                <select
+                  className={styles.drawerSelect}
+                  value={drawerSpeed}
+                  onChange={(e) => setDrawerSpeed(e.target.value)}
+                >
                   <option value="0.5s">0.5s</option>
                   <option value="1s">1s</option>
                   <option value="2s">2s</option>
@@ -718,6 +755,7 @@ export default function App() {
               <button
                 className={`${styles.drawerPinBtn} ${drawerPinned ? styles.drawerPinActive : ""}`}
                 onClick={() => setDrawerPinned((v) => !v)}
+                type="button"
               >
                 {drawerPinned ? "Pinned" : "Pin"}
               </button>
@@ -728,7 +766,11 @@ export default function App() {
             <div className={styles.drawerHero}>
               <div className={styles.drawerHeroLeft}>
                 <div className={styles.drawerStatusRow}>
-                  <span className={`${styles.drawerStatusDot} ${drawerUp === null ? styles.neutral : drawerUp ? styles.good : styles.bad}`} />
+                  <span
+                    className={`${styles.drawerStatusDot} ${
+                      drawerUp === null ? styles.neutral : drawerUp ? styles.good : styles.bad
+                    }`}
+                  />
                   <div className={styles.drawerStatusText}>{drawerUp === null ? "No data" : drawerUp ? "UP" : "DOWN"}</div>
                   <div className={styles.drawerStatusMeta}>
                     status {drawerLatest?.status ?? "N/A"} , {safeNum(drawerLatest?.ms)} ms ,{" "}

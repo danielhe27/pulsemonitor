@@ -1,10 +1,15 @@
+// server/app.js
 import express from "express";
 import cors from "cors";
 import { db } from "./db.js";
+import { ensurePiTables } from "./pi/pi.schema.js";
+import { makePiRouter } from "./pi/pi.routes.js";
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+ensurePiTables(db);
 
 async function checkUrl(url) {
   const start = Date.now();
@@ -12,19 +17,14 @@ async function checkUrl(url) {
     const res = await fetch(url);
     const ms = Date.now() - start;
     return { ok: res.ok, status: res.status, ms };
-  } catch (err) {
+  } catch {
     const ms = Date.now() - start;
     return { ok: false, status: null, ms };
   }
 }
 
-app.get("/", (req, res) => {
-  res.send("PulseMonitor API running");
-});
-
-app.get("/api/health", (req, res) => {
-  res.json({ ok: true });
-});
+app.get("/", (req, res) => res.send("PulseMonitor API running"));
+app.get("/api/health", (req, res) => res.json({ ok: true }));
 
 app.get("/api/endpoints", (req, res) => {
   const rows = db
@@ -66,9 +66,7 @@ app.post("/api/check/:id", async (req, res) => {
     .prepare("SELECT id, name, method, url FROM endpoints WHERE id = ?")
     .get(id);
 
-  if (!endpoint) {
-    return res.status(404).json({ error: "Endpoint not found" });
-  }
+  if (!endpoint) return res.status(404).json({ error: "Endpoint not found" });
 
   const result = await checkUrl(endpoint.url);
 
@@ -90,42 +88,31 @@ app.get("/api/checks/:id", (req, res) => {
   res.json(rows);
 });
 
-const PORT = process.env.PORT || 5050;
+// ✅ Pi routes (DB-backed) live here:
+app.use("/api/pi", makePiRouter(db));
 
-const AUTO_CHECK_MS = Number(process.env.AUTO_CHECK_MS || 2_000);
+const PORT = process.env.PORT || 5050;
+const AUTO_CHECK_MS = Number(process.env.AUTO_CHECK_MS || 2000);
 
 async function runAutoChecks() {
   try {
-    // Read all endpoints from DB
-    const endpoints = db
-      .prepare("SELECT id, url FROM endpoints ORDER BY created_at DESC")
-      .all();
-
+    const endpoints = db.prepare("SELECT id, url FROM endpoints ORDER BY created_at DESC").all();
     if (!endpoints || endpoints.length === 0) return;
 
     for (const e of endpoints) {
       const result = await checkUrl(e.url);
-
-      // Save into checks table
       db.prepare(
         `INSERT INTO checks (endpoint_id, ok, status, ms)
          VALUES (?, ?, ?, ?)`
-      ).run(
-        e.id,
-        result.ok ? 1 : 0,
-        result.status,
-        result.ms
-      );
+      ).run(e.id, result.ok ? 1 : 0, result.status, result.ms);
     }
-
-    console.log(`[auto-check] ran ${endpoints.length} checks`);
   } catch (err) {
     console.error("[auto-check] error:", err);
   }
 }
 
 setInterval(runAutoChecks, AUTO_CHECK_MS);
-runAutoChecks(); // run once on startup
+runAutoChecks();
 
 app.listen(PORT, () => {
   console.log(`API running at http://localhost:${PORT}`);
