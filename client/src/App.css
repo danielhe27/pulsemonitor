@@ -1,44 +1,218 @@
-#root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+:root {
+  --bg0: #05070c;
+  --bg1: #070b12;
+  --panel: rgba(16, 22, 32, 0.68);
+  --panel2: rgba(10, 14, 20, 0.40);
+  --line: rgba(255, 255, 255, 0.10);
+  --line2: rgba(255, 255, 255, 0.06);
+  --text: rgba(255, 255, 255, 0.88);
+  --muted: rgba(245, 247, 250, 0.68);
+  --muted2: rgba(245, 247, 250, 0.48);
+
+  --violet: rgba(155, 107, 255, 0.95);
+  --cyan: rgba(41, 212, 255, 0.95);
+  --green: rgba(29, 215, 96, 0.95);
+  --red: rgba(255, 83, 61, 0.95);
+
+  --r: 18px;
+  --r2: 14px;
+  --blur: blur(14px);
+
+  --shadow: 0 22px 90px rgba(0, 0, 0, 0.60);
+  --shadow2: 0 14px 50px rgba(0, 0, 0, 0.45);
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
+.shell {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 320px 1fr 360px;
+  gap: 14px;
+  margin-top: 14px;
 }
 
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
+.panel {
+  border: 1px solid var(--line2);
+  border-radius: var(--r);
+  background: var(--panel);
+  backdrop-filter: var(--blur);
+  box-shadow: var(--shadow2);
+  overflow: hidden;
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 14px 10px 14px;
+  border-bottom: 1px solid var(--line2);
+}
+
+.panelTitle {
+  font-size: 12px;
+  letter-spacing: 0.28px;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.panelMeta {
+  font-size: 12px;
+  color: var(--muted2);
+}
+
+.panelBody {
+  padding: 12px;
+}
+
+.deviceList {
+  display: grid;
+  gap: 10px;
+}
+
+.deviceItem {
+  border: 1px solid var(--line2);
+  background: rgba(7, 10, 18, 0.55);
+  border-radius: var(--r2);
+  padding: 12px;
+  cursor: pointer;
+  transition: transform 140ms ease, border-color 140ms ease, background 140ms ease;
+}
+
+.deviceItem:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.deviceActive {
+  border-color: rgba(155, 107, 255, 0.38);
+  box-shadow: 0 0 0 1px rgba(155, 107, 255, 0.22) inset;
+}
+
+.deviceTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.deviceName {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line2);
+  background: rgba(10, 14, 20, 0.35);
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  box-shadow: 0 0 0 5px rgba(255, 255, 255, 0.04);
+}
+
+.dotGood { background: var(--green); }
+.dotWarn { background: rgba(255, 200, 90, 0.95); }
+.dotBad { background: var(--red); }
+.dotNeutral { background: rgba(180, 190, 210, 0.85); }
+
+.deviceSub {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--muted2);
+  display: grid;
+  gap: 4px;
+}
+
+.mainChartWrap {
+  height: 420px;
+  border: 1px solid var(--line2);
+  border-radius: var(--r);
+  background: radial-gradient(900px 380px at 20% 20%, rgba(155, 107, 255, 0.14), transparent 60%),
+              radial-gradient(900px 380px at 80% 30%, rgba(41, 212, 255, 0.10), transparent 60%),
+              rgba(7, 10, 18, 0.50);
+  overflow: hidden;
+}
+
+.chartHeader {
+  padding: 14px;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--line2);
+}
+
+.chartTitle {
+  font-weight: 800;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.chartSubtitle {
+  font-size: 12px;
+  color: var(--muted2);
+}
+
+.chartBody {
+  height: calc(420px - 54px);
+  padding: 12px;
+}
+
+.metricsGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.metricCard {
+  border: 1px solid var(--line2);
+  background: rgba(7, 10, 18, 0.55);
+  border-radius: var(--r2);
+  padding: 12px;
+  min-height: 76px;
+}
+
+.metricLabel {
+  font-size: 12px;
+  color: var(--muted2);
+}
+
+.metricValue {
+  margin-top: 6px;
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: 0.2px;
+  color: var(--text);
+}
+
+.metricHint {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--muted2);
+}
+
+@media (max-width: 1100px) {
+  .shell {
+    grid-template-columns: 1fr;
   }
-  to {
-    transform: rotate(360deg);
+
+  .mainChartWrap {
+    height: 360px;
+  }
+
+  .chartBody {
+    height: calc(360px - 54px);
   }
 }
-
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
-}
-
-.card {
-  padding: 2em;
-}
-
-.read-the-docs {
-  color: #888;
-}
-
-
